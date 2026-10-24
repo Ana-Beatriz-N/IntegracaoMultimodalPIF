@@ -22,15 +22,21 @@ As três modalidades são analisadas separadamente, em conjuntos sem pareamento 
 README.md                         documentação principal
 executar_tcc.py                    execução completa e manifesto
 gerar_relatorio_integrado.py       síntese central reutilizável
-clinica_pipeline.py                análise e componente clínico; modelos compartilhados
-proteomica_pipeline.py             matriz quantitativa, seleção e avaliação de pools
-genomica_pipeline.py               auditoria FASTA, descritores e integração de metadados
-gerar_metadados_genomicos.py        geração inicial de metadados, sem sobrescrita
+clinica/
+  clinica_pipeline.py              análise e componente clínico; modelos compartilhados
+  verificar_clinica.py             verificações clínicas
+  Pif_Dados_Clinicos_Reprodutivel.ipynb  notebook clínico opcional
+proteomica/
+  proteomica_pipeline.py           matriz quantitativa, seleção e avaliação de pools
+  verificar_proteomica.py          verificações proteômicas
+genomica/
+  genomica_pipeline.py             auditoria FASTA e integração de metadados
+  gerar_metadados_genomicos.py     geração inicial de metadados, sem sobrescrita
+  verificar_genomica.py            verificações genômicas
 avaliacao_comum.py                 métricas binárias compartilhadas
 comparar_modalidades.py            tabelas técnicas de comparação e referência fixa
 verificar_*.py                     verificações e testes de integridade/falhas
 requirements_clinicos.txt          dependências de todas as análises
-Pif_Dados_Clinicos_Reprodutivel.ipynb  interface opcional para o módulo clínico
 06.2025_-_FIP_and_Housemate_Clinical_Data_Final_-_for_Dryad_Upload.csv
 JPST003448_all/                    TSV quantitativo e originais MGF/mzXML
 dados_genomicos/                   FASTA e metadados originais
@@ -49,7 +55,7 @@ resultados/
     tabela_comparativa.csv         cópia preservada desta execução
 ```
 
-Somente os resultados da execução `execucao_20261024T173849_125977Z` foram mantidos nesta limpeza, em `resultados/execucoes/`, junto ao relatório integrado, à tabela e ao apontador atual em `resultados/`. As CLIs avulsas ainda aceitam destinos configuráveis e podem criar novas pastas. As pastas de resultados são ignoradas pelo Git: uma cópia nova precisa executar o pipeline ou receber os artefatos completos.
+Os resultados ficam em `resultados/execucoes/`, com a execução publicada identificada em `resultados/execucao_atual.json`. O relatório integrado e a tabela principal ficam em `resultados/`. A organização do código por modalidade não move os dados nem altera resultados anteriores. As CLIs avulsas aceitam destinos configuráveis e criam novas pastas. As pastas de resultados são ignoradas pelo Git: uma cópia nova precisa executar o pipeline ou receber os artefatos completos.
 
 Os READMEs secundários, os documentos Markdown de auditoria e o relatório da execução anterior foram removidos a pedido. METODOLOGIA.md aponta para este documento. Os inventários de entradas e da limpeza anterior foram preservados como registros auxiliares. O README de `node_modules/pandas` pertence a uma dependência JavaScript e não integra a documentação científica do projeto.
 
@@ -116,6 +122,8 @@ Associações clínicas usam permutações dentro de casa, hipótese de permutab
 
 O componente logístico demográfico final é ajustado na coorte inteira para reutilização, sem avaliação independente desse ajuste. Carregue joblib apenas de origem confiável. `ComponenteClinico.prever` preserva FIPID e aceita categorias inéditas; não exige grupo ou diagnóstico, mas precisa dos campos brutos usados pela engenharia. O carregador de pesquisa valida o esquema completo. Não há modelo final proteômico ou genômico para uso diagnóstico.
 
+Para carregar componentes clínicos, inclusive os salvos antes da separação em pastas, use `from clinica.clinica_pipeline import carregar_componente` e `componente = carregar_componente(caminho_do_joblib)`. Esse carregador mantém compatibilidade com o nome antigo do módulo presente nos artefatos históricos.
+
 ## Métricas de avaliação
 
 Accuracy, precisão da classe positiva, sensibilidade/recall, especificidade TN/(TN+FP), F1 e ROC-AUC, por fold. Médias não ponderadas e desvios amostrais não são intervalos de confiança. Precisão/F1 sem positivos previstos recebem zero explicitamente. Especificidade sem negativos e AUC sem duas classes ficam indisponíveis. AUC da SVM usa margem em cada fold, nunca margens agregadas de modelos distintos. Matrizes OOF usam linhas observadas, colunas previstas e ordem 0/1. Não há teste externo.
@@ -144,7 +152,7 @@ python -m pip install "jupyterlab>=4,<5" "ipykernel>=6,<8"
 python -m jupyterlab
 ```
 
-Abra o notebook clínico na raiz e execute as células em ordem; ele chama o mesmo módulo da CLI. A execução pelo terminal não requer Jupyter, Colab ou upload interativo.
+Inicie Jupyter na raiz e abra `clinica/Pif_Dados_Clinicos_Reprodutivel.ipynb`. Execute as células em ordem; a primeira célula configura a raiz e importa o mesmo módulo da CLI. A execução pelo terminal não requer Jupyter, Colab ou upload interativo.
 
 ## Configuração dos caminhos dos dados
 
@@ -159,20 +167,20 @@ Os placeholders devem ser substituídos. `--k` aceita 1, 2 ou 3. Sem `--metadado
 ## Como executar cada etapa
 
 ```powershell
-python verificar_clinica.py
-python verificar_proteomica.py
-python -m unittest verificar_genomica verificar_relatorio -v
-python clinica_pipeline.py --resultados resultados/avulsos/clinicos
-python proteomica_pipeline.py --resultados resultados/avulsos/proteomicos
-python genomica_pipeline.py --dados dados_genomicos --metadados dados_genomicos/metadados_genomicos.csv --saida resultados/avulsos/genomicos --k 2
+python -m clinica.verificar_clinica
+python -m proteomica.verificar_proteomica
+python -m unittest genomica.verificar_genomica verificar_relatorio -v
+python -m clinica.clinica_pipeline --resultados resultados/avulsos/clinicos
+python -m proteomica.proteomica_pipeline --resultados resultados/avulsos/proteomicos
+python -m genomica.genomica_pipeline --dados dados_genomicos --metadados dados_genomicos/metadados_genomicos.csv --saida resultados/avulsos/genomicos --k 2
 ```
 
-CLIs avulsas criam pastas datadas e relatórios técnicos, mas não produzem manifesto conjunto; seus resultados não são misturados automaticamente no relatório integrado. Clínica aceita `--arquivo`, `--resultados`, `--folds` e `--semente`; proteômica aceita `--arquivo` e `--resultados`. Genômica aceita os argumentos acima e `--fasta ARQUIVO ...` para auditoria avulsa estrita sem integração.
+Execute os comandos com `python -m` a partir da raiz do projeto, para resolver os pacotes e módulos compartilhados. CLIs avulsas criam pastas datadas e relatórios técnicos, mas não produzem manifesto conjunto; seus resultados não são misturados automaticamente no relatório integrado. Clínica aceita `--arquivo`, `--resultados`, `--folds` e `--semente`; proteômica aceita `--arquivo` e `--resultados`. Genômica aceita os argumentos acima e `--fasta ARQUIVO ...` para auditoria avulsa estrita sem integração.
 
 O gerador inicial de metadados é opcional e recusa sobrescrever arquivos existentes:
 
 ```powershell
-python gerar_metadados_genomicos.py --dados dados_genomicos --saida resultados/metadados_iniciais
+python -m genomica.gerar_metadados_genomicos --dados dados_genomicos --saida resultados/metadados_iniciais
 ```
 
 Ele não substitui adjudicação clínica. Não regenere os metadados para perder alterações manuais.

@@ -9,9 +9,9 @@ from pathlib import Path
 import platform
 import traceback
 
-from clinica_pipeline import Configuracao, ARQUIVO_PADRAO, executar as executar_clinica
-from proteomica_pipeline import ARQUIVO, executar as executar_proteomica
-from genomica_pipeline import executar_integrado
+from clinica.clinica_pipeline import Configuracao, ARQUIVO_PADRAO, executar as executar_clinica
+from proteomica.proteomica_pipeline import ARQUIVO, executar as executar_proteomica
+from genomica.genomica_pipeline import executar_integrado
 from comparar_modalidades import comparar
 from gerar_relatorio_integrado import gerar as gerar_relatorio, hash_arquivo
 
@@ -21,10 +21,14 @@ def executar(args):
     inicio = datetime.now(timezone.utc)
     pasta = Path(args.resultados) / 'execucoes' / inicio.strftime('execucao_%Y%m%dT%H%M%S_%fZ')
     pasta.mkdir(parents=True, exist_ok=False)
+    raiz_codigo = Path(__file__).resolve().parent
+    fontes = list(raiz_codigo.glob('*.py'))
+    for modalidade in ['clinica', 'proteomica', 'genomica']:
+        fontes.extend((raiz_codigo / modalidade).glob('*.py'))
     registro = dict(execucao_id=pasta.name, iniciada_em_utc=inicio.isoformat(), status='em_execucao',
         configuracao=vars(args), python=platform.python_version(),
         versoes={p: importlib.metadata.version(p) for p in ['numpy', 'pandas', 'scipy', 'scikit-learn', 'matplotlib', 'joblib']},
-        codigo_sha256={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in Path(__file__).parent.glob('*.py')},
+        codigo_sha256={p.relative_to(raiz_codigo).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in fontes},
         etapas={})
     manifesto = pasta / 'manifesto_execucao.json'
     def salvar():
