@@ -22,14 +22,14 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score,
-                             roc_auc_score, confusion_matrix, ConfusionMatrixDisplay,
+from sklearn.metrics import (confusion_matrix, ConfusionMatrixDisplay,
                              RocCurveDisplay)
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.svm import SVC
 import joblib
+from avaliacao_comum import METRICAS, calcular_metricas
 
 
 ARQUIVO_PADRAO = "06.2025_-_FIP_and_Housemate_Clinical_Data_Final_-_for_Dryad_Upload.csv"
@@ -363,10 +363,7 @@ def avaliar_modelos(coorte, x, config, pasta):
                 assert np.isfinite(escore).all()
                 metricas.append({"experimento": experimento, "modelo": nome, "fold": fold,
                     "n_treino": len(treino), "n_validacao": len(teste),
-                    "accuracy": accuracy_score(yv, pred),
-                    "precision": precision_score(yv, pred, zero_division=0),
-                    "recall": recall_score(yv, pred, zero_division=0),
-                    "f1": f1_score(yv, pred, zero_division=0), "roc_auc": roc_auc_score(yv, escore)})
+                    **calcular_metricas(yv, pred, escore)})
                 linhas = coorte.iloc[teste][[ID, CASA, GRUPO, DIAGNOSTICO, "alvo"]].copy()
                 linhas = linhas.assign(experimento=experimento, modelo=nome, fold=fold,
                     previsao=pred, escore=escore, tipo_escore="probabilidade_nao_calibrada" if probabilistico else "margem_svm")
@@ -407,7 +404,7 @@ def avaliar_modelos(coorte, x, config, pasta):
             ax.set(title=f"ROC na validação de cada fold: {nome}\n{experimento}", xlabel="Taxa de falsos positivos", ylabel="Taxa de verdadeiros positivos")
             fig.tight_layout(); fig.savefig(pasta / f"roc_{prefixo}.png", dpi=150); plt.close(fig)
     metricas = pd.DataFrame(metricas)
-    medidas = ["accuracy", "precision", "recall", "f1", "roc_auc"]
+    medidas = METRICAS
     resumo = metricas.groupby(["experimento", "modelo"])[medidas].agg(["mean", "std"])
     resumo.columns = [f"{a}_{'media' if b == 'mean' else 'dp'}" for a, b in resumo.columns]
     salvar_tabela(metricas, pasta / "metricas_folds.csv")
@@ -523,9 +520,9 @@ def gerar_relatorio(dados, coorte, x, resumo, metricas, associacoes, pasta):
         f"Idade válida em {x.idade_anos.notna().sum()} animais. "
         f"Validação em {metricas.fold.nunique()} folds, sem compartilhamento de casas.", "",
         "Classe positiva: caso incluído no estudo. Desvio-padrão amostral entre folds; não é intervalo de confiança.", "",
-        "|Experimento|Modelo|Accuracy|Precision|Recall|F1|ROC-AUC|", "|---|---|---|---|---|---|---|"]
+        "|Experimento|Modelo|Accuracy|Precision|Recall|Especificidade|F1|ROC-AUC|", "|---|---|---|---|---|---|---|---|"]
     for (exp, modelo), linha in resumo.iterrows():
-        valores = [f"{linha[m+'_media']:.3f} ± {linha[m+'_dp']:.3f}" for m in ["accuracy", "precision", "recall", "f1", "roc_auc"]]
+        valores = [f"{linha[m+'_media']:.3f} ± {linha[m+'_dp']:.3f}" for m in METRICAS]
         linhas.append("|"+"|".join([exp, modelo]+valores)+"|")
     linhas += ["", "No experimento demográfico, os resultados calculados de ROC-AUC foram: " +
         "; ".join(f"{nome}: {linha.roc_auc_media:.3f} ± {linha.roc_auc_dp:.3f}"
@@ -567,7 +564,7 @@ def gerar_relatorio(dados, coorte, x, resumo, metricas, associacoes, pasta):
         "Identificadores e grupo nunca entram como preditores. O CSV original permanece intacto.",
         "Para outras modalidades serão necessários ID de animal/amostra validado, tabela de correspondência entre amostras, "
         "casa, data e momento clínico, proveniência, critérios diagnósticos, disponibilidade de cada variável no momento da previsão, "
-        "consentimento e partições de validação comuns. Nenhuma outra modalidade foi implementada.", "",
+        "consentimento e partições de validação comuns. As outras modalidades são executadas independentemente por executar_tcc.py.", "",
         "Referências técnicas: https://scikit-learn.org/stable/modules/cross_validation.html ; "
         "https://scikit-learn.org/stable/modules/permutation_importance.html"]
     return "\n".join(linhas)
